@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>小球华容道</title>
+<style>
+:root{
+  --bg:#f4f1ea; --panel:#ffffff; --ink:#1f2328; --muted:#6b6f76; --line:#e3ded3;
+  --accent:#1f4f8f; --accent-ink:#ffffff; --hint:#ff8a00; --ok:#2f8a48;
+  --frame:#bdbdbd; --cellbg:#d6d6d6; --gridline:#f3f3f3;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16181c; --panel:#20242a; --ink:#e8e6e1; --muted:#9aa0a8; --line:#2e333a;
+    --accent:#4f86d1; --frame:#565a61; --ok:#5cc278;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16181c; --panel:#20242a; --ink:#e8e6e1; --muted:#9aa0a8; --line:#2e333a;
+  --accent:#4f86d1; --frame:#565a61; --ok:#5cc278;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;}
+body{min-height:100vh;display:flex;justify-content:center}
+.app{width:100%;max-width:480px;padding:20px 16px 28px;display:flex;flex-direction:column;align-items:center;gap:14px}
+header{width:100%;display:flex;align-items:baseline;justify-content:space-between}
+h1{font-size:20px;margin:0;letter-spacing:.02em}
+.lvl{color:var(--muted);font-size:14px}
+.stats{display:flex;gap:8px;width:100%}
+.stat{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 6px;text-align:center}
+.stat b{display:block;font-size:22px;font-variant-numeric:tabular-nums;line-height:1.2}
+.stat span{font-size:12px;color:var(--muted)}
+.board-wrap{padding:8px;background:var(--frame);border-radius:14px}
+#board{position:relative;background-color:var(--cellbg);
+  background-image:linear-gradient(to right,var(--gridline) 2px,transparent 2px),linear-gradient(to bottom,var(--gridline) 2px,transparent 2px);
+  background-position:-1px -1px;touch-action:none;user-select:none;-webkit-user-select:none;border-radius:4px;overflow:hidden}
+.hole,.steel,.piece,.ghost{position:absolute}
+.hole{z-index:1;display:grid;place-items:center}
+.hole::after{content:"";width:86%;height:86%;border-radius:50%;background:radial-gradient(circle at 50% 42%,#262626,#000 70%)}
+.steel{z-index:2}
+.steel .face{width:100%;height:100%;border-radius:calc(var(--cell)*.08);
+  background:
+    radial-gradient(circle at 6px 6px,#808080 2px,transparent 2.6px),
+    radial-gradient(circle at calc(100% - 6px) 6px,#808080 2px,transparent 2.6px),
+    radial-gradient(circle at 6px calc(100% - 6px),#808080 2px,transparent 2.6px),
+    radial-gradient(circle at calc(100% - 6px) calc(100% - 6px),#808080 2px,transparent 2.6px),
+    linear-gradient(to top right,transparent calc(50% - 1.5px),rgba(0,0,0,.16) 50%,transparent calc(50% + 1.5px)),
+    linear-gradient(to bottom right,transparent calc(50% - 1.5px),rgba(0,0,0,.16) 50%,transparent calc(50% + 1.5px)),
+    linear-gradient(135deg,#e9e9e9,#c3c3c3);
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.steel,.piece,.ghost{padding:calc(var(--cell)*.07)}
+.piece{z-index:3;cursor:grab;touch-action:none;transition:left .14s ease-out,top .14s ease-out,transform .14s ease-out}
+.piece .face{width:100%;height:100%;border-radius:calc(var(--cell)*.15);background:var(--c);
+  box-shadow:inset 0 -3px 0 rgba(0,0,0,.13),0 1px 2px rgba(0,0,0,.18);transition:box-shadow .15s}
+.piece.dragging{transition:none;z-index:6;cursor:grabbing}
+.piece.dragging .face{box-shadow:inset 0 -3px 0 rgba(0,0,0,.13),0 8px 16px rgba(0,0,0,.28)}
+.piece.ball{z-index:4;display:grid;place-items:center}
+.piece.ball .face{width:76%;height:76%;border-radius:50%;
+  background:radial-gradient(circle at 34% 30%,#ffa08c 0,#ee4c35 42%,#bf2f1c 100%);
+  box-shadow:0 2px 3px rgba(0,0,0,.25)}
+.piece.ball.sink .face{transform:scale(.45);opacity:0;transition:transform .45s ease-in,opacity .45s ease-in}
+.piece.hinted .face{animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,138,0,0)}50%{box-shadow:0 0 0 4px var(--hint)}}
+#board.demo .piece{transition:left .35s ease-in-out,top .35s ease-in-out,transform .35s ease-in-out}
+.ghost{z-index:2;pointer-events:none}
+.ghost .face{width:100%;height:100%;border:3px dashed var(--hint);border-radius:calc(var(--cell)*.15);background:rgba(255,138,0,.14)}
+.ghost.ball .face{border-radius:50%}
+.status{min-height:42px;font-size:14px;color:var(--muted);text-align:center;line-height:1.5;padding:0 4px}
+.status.hint{color:var(--ink)}
+.row{display:flex;gap:8px;width:100%}
+button{font:inherit;font-size:15px;padding:11px 0;border-radius:12px;border:1px solid var(--line);
+  background:var(--panel);color:var(--ink);cursor:pointer;flex:1}
+button:disabled{opacity:.4;cursor:default}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.levels{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;width:100%}
+.levels button.dot{flex:none;width:36px;height:36px;padding:0;border-radius:50%;font-size:14px;font-variant-numeric:tabular-nums}
+.levels button.dot.done{border-color:var(--ok);color:var(--ok)}
+.levels button.dot.cur{background:var(--accent);color:var(--accent-ink);border-color:transparent}
+.tip{font-size:12px;color:var(--muted);text-align:center;line-height:1.6}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.38);display:grid;place-items:center;padding:16px;z-index:50}
+.modal[hidden]{display:none}
+.card{background:var(--panel);border-radius:18px;padding:24px 20px 18px;width:min(320px,100%);text-align:center;
+  box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.card h2{margin:0 0 6px;font-size:24px}
+.card p{margin:0 0 18px;color:var(--muted);line-height:1.6}
+.card .perfect{color:var(--ok);font-weight:600}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>小球华容道</h1>
+    <span class="lvl" id="lvlLabel"></span>
+  </header>
+  <div class="stats">
+    <div class="stat"><b id="sMoves">0</b><span>已用步数</span></div>
+    <div class="stat"><b id="sMin">–</b><span>最少步数</span></div>
+    <div class="stat"><b id="sBest">–</b><span>我的最好</span></div>
+  </div>
+  <div class="board-wrap"><div id="board"></div></div>
+  <div class="status" id="status"></div>
+  <div class="row">
+    <button id="bUndo">撤销</button>
+    <button id="bReset">重来</button>
+    <button id="bHint" class="primary">提示</button>
+    <button id="bDemo">正确演示</button>
+  </div>
+  <div class="levels" id="levels"></div>
+  <div class="tip">拖动方块或小球，一次拖动算 1 步，不管滑几格。<br>灰色带 X 的是铁块，不能动。把红球推进黑洞就过关。</div>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <div class="card">
+    <h2>过关！</h2>
+    <p id="winText"></p>
+    <div class="row">
+      <button id="bAgain">再来一次</button>
+      <button id="bNext" class="primary">下一关</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const C_LB='#4ea9ee', C_SKY='#62b4ea', C_DB='#1f3f8c', C_Y='#f5c344', C_G='#3c9a52',
+      C_P='#7a3d9e', C_M='#b8428b', C_R='#ea5139', C_OL='#8db634';
+
+// steel: [r, c, h, w]
+const LEVELS=[
+  {rows:5,cols:3,hole:[4,0],steel:[],ball:[2,1],pieces:[
+    {r:0,c:0,h:2,w:2,color:C_LB},{r:2,c:0,h:1,w:1,color:C_Y},
+    {r:3,c:0,h:2,w:2,color:C_DB},{r:3,c:2,h:1,w:1,color:C_G}]},
+  {rows:7,cols:5,hole:[1,4],steel:[[0,1,3,1]],ball:[3,2],pieces:[
+    {r:0,c:2,h:1,w:3,color:C_Y},{r:1,c:2,h:1,w:3,color:C_Y},{r:2,c:2,h:1,w:3,color:C_Y},
+    {r:1,c:0,h:3,w:1,color:C_Y},{r:3,c:1,h:4,w:1,color:C_Y}]},
+  {rows:7,cols:5,hole:[3,0],steel:[[2,0,1,2],[3,4,1,1],[5,4,1,1],[6,0,1,2]],ball:[1,0],pieces:[
+    {r:1,c:2,h:1,w:2,color:C_P},{r:2,c:2,h:1,w:3,color:C_SKY},{r:3,c:0,h:1,w:2,color:C_SKY},
+    {r:3,c:3,h:2,w:1,color:C_Y},{r:4,c:0,h:2,w:1,color:C_LB},{r:5,c:1,h:1,w:3,color:C_R}]},
+  {rows:5,cols:3,hole:[4,1],steel:[],ball:[1,1],pieces:[
+    {r:0,c:0,h:2,w:1,color:C_LB},{r:2,c:1,h:1,w:2,color:C_G},
+    {r:3,c:0,h:1,w:2,color:C_Y},{r:3,c:2,h:2,w:1,color:C_DB}]},
+  {rows:5,cols:3,hole:[0,2],steel:[],ball:[4,0],pieces:[
+    {r:0,c:1,h:2,w:2,color:C_R},{r:2,c:0,h:1,w:1,color:C_P},
+    {r:2,c:2,h:1,w:1,color:C_LB},{r:3,c:1,h:2,w:2,color:C_Y}]},
+  {rows:7,cols:5,hole:[0,3],steel:[[2,4,1,1],[5,3,1,2]],ball:[4,4],pieces:[
+    {r:0,c:0,h:1,w:3,color:C_SKY},{r:0,c:3,h:1,w:2,color:C_LB},{r:1,c:0,h:1,w:1,color:C_M},
+    {r:2,c:1,h:2,w:1,color:C_M},{r:2,c:2,h:2,w:2,color:C_LB},{r:3,c:0,h:3,w:1,color:C_Y},
+    {r:4,c:1,h:1,w:3,color:C_Y},{r:5,c:1,h:2,w:2,color:C_OL}]},
+  {rows:7,cols:5,hole:[1,4],steel:[[1,2,1,1],[2,3,1,2],[5,3,1,2]],ball:[3,3],pieces:[
+    {r:0,c:0,h:3,w:1,color:C_M},{r:0,c:1,h:3,w:1,color:C_OL},{r:1,c:3,h:1,w:2,color:C_SKY},
+    {r:2,c:2,h:3,w:1,color:C_SKY},{r:3,c:0,h:1,w:2,color:C_Y},{r:3,c:4,h:2,w:1,color:C_P}]},
+  {rows:6,cols:4,hole:[4,0],steel:[[3,2,3,1],[4,1,1,1],[4,3,1,1]],ball:[3,3],pieces:[
+    {r:0,c:1,h:1,w:2,color:C_G},{r:1,c:1,h:1,w:1,color:C_LB},{r:1,c:2,h:1,w:1,color:C_Y},
+    {r:1,c:3,h:2,w:1,color:C_R},{r:2,c:0,h:2,w:2,color:C_OL}]},
+  {rows:7,cols:5,hole:[6,3],steel:[[4,1,3,1],[5,3,1,2]],ball:[1,1],pieces:[
+    {r:0,c:0,h:2,w:1,color:C_P},{r:0,c:2,h:2,w:1,color:C_Y},{r:0,c:3,h:1,w:1,color:C_LB},
+    {r:2,c:0,h:4,w:1,color:C_R},{r:3,c:1,h:1,w:3,color:C_M},{r:4,c:2,h:3,w:1,color:C_DB},
+    {r:4,c:3,h:1,w:2,color:C_M}]},
+  {rows:6,cols:4,hole:[5,0],steel:[],ball:[0,3],pieces:[
+    {r:0,c:0,h:3,w:1,color:C_P},{r:1,c:1,h:3,w:1,color:C_Y},{r:1,c:2,h:1,w:2,color:C_M},
+    {r:2,c:2,h:3,w:1,color:C_LB},{r:3,c:3,h:3,w:1,color:C_LB},{r:4,c:0,h:1,w:2,color:C_Y}]},
+];
+
+const COLOR_NAMES={[C_LB]:'浅蓝',[C_SKY]:'浅蓝',[C_DB]:'深蓝',[C_Y]:'黄色',[C_G]:'绿色',
+  [C_P]:'紫色',[C_M]:'紫红',[C_R]:'红色',[C_OL]:'草绿'};
+const DIR_NAMES=mv=>mv.dr<0?'上':mv.dr>0?'下':mv.dc<0?'左':'右';
+
+const $=id=>document.getElementById(id);
+const board=$('board');
+const DEFAULT_STATUS='把红球推进黑洞。';
+
+let L, li=0, movers=[], pos=[], fixedOcc, moves=0, hist=[], won=false;
+let cell=60, els=[], staticEls=[], drag=null, hint=null, ghostEl=null, demo=null;
+
+function pieceName(i){
+  const m=movers[i];
+  if(m.ball) return '红球';
+  const shape=m.h===m.w?(m.h===1?'小块':'大方块'):(m.h>m.w?'竖条':'横条');
+  return (COLOR_NAMES[m.color]||'')+shape;
+}
+const minSteps=[];
+
+let best={};
+try{ best=JSON.parse(localStorage.getItem('hrd-best')||'{}')||{}; }catch(e){ best={}; }
+function saveBest(){ try{ localStorage.setItem('hrd-best',JSON.stringify(best)); }catch(e){} }
+function saveLevel(){ try{ localStorage.setItem('hrd-level',String(li)); }catch(e){} }
+
+function loadLevel(i){
+  if(demo){ clearTimeout(demo.timer); demo=null; }
+  board.classList.remove('demo');
+  li=i; L=LEVELS[i]; won=false; moves=0; hist=[]; drag=null; hint=null;
+  movers=L.pieces.map(p=>({h:p.h,w:p.w,color:p.color,ball:false}));
+  movers.push({h:1,w:1,ball:true});
+  pos=L.pieces.map(p=>[p.r,p.c]); pos.push(L.ball.slice());
+  fixedOcc=new Int8Array(L.rows*L.cols);
+  for(const [r,c,h,w] of L.steel)
+    for(let a=0;a<h;a++) for(let b=0;b<w;b++) fixedOcc[(r+a)*L.cols+c+b]=1;
+  if(minSteps[i]==null){ const p=solve(pos); minSteps[i]=p?p.length:null; }
+  $('modal').hidden=true;
+  buildBoard(); saveLevel(); setStatus(DEFAULT_STATUS); updateUI();
+}
+
+function buildBoard(){
+  board.innerHTML=''; els=[]; staticEls=[]; ghostEl=null;
+  const hole=document.createElement('div'); hole.className='hole';
+  board.appendChild(hole); staticEls.push({el:hole,r:L.hole[0],c:L.hole[1],h:1,w:1});
+  for(const [r,c,h,w] of L.steel){
+    const s=document.createElement('div'); s.className='steel';
+    s.innerHTML='<div class="face"></div>';
+    board.appendChild(s); staticEls.push({el:s,r,c,h,w});
+  }
+  movers.forEach((m,i)=>{
+    const el=document.createElement('div');
+    el.className='piece'+(m.ball?' ball':'');
+    if(!m.ball) el.style.setProperty('--c',m.color);
+    el.innerHTML='<div class="face"></div>';
+    attachDrag(el,i);
+    board.appendChild(el); els.push(el);
+  });
+  layout();
+}
+
+function place(el,r,c,h,w){
+  el.style.left=(c*cell)+'px'; el.style.top=(r*cell)+'px';
+  el.style.width=(w*cell)+'px'; el.style.height=(h*cell)+'px';
+}
+
+function layout(){
+  const availW=Math.min(window.innerWidth,480)-32-16;
+  const availH=window.innerHeight-360;
+  cell=Math.floor(Math.max(36,Math.min(72,availW/L.cols,Math.max(availH,36*L.rows)/L.rows)));
+  board.style.setProperty('--cell',cell+'px');
+  board.style.width=(L.cols*cell)+'px'; board.style.height=(L.rows*cell)+'px';
+  board.style.backgroundSize=cell+'px '+cell+'px';
+  for(const s of staticEls) place(s.el,s.r,s.c,s.h,s.w);
+  movers.forEach((m,i)=>place(els[i],pos[i][0],pos[i][1],m.h,m.w));
+  if(hint&&ghostEl){ const m=movers[hint.i]; place(ghostEl,hint.r,hint.c,m.h,m.w); }
+}
+
+function occExcept(skip){
+  const o=fixedOcc.slice(), C=L.cols;
+  pos.forEach(([r,c],j)=>{
+    if(j===skip) return;
+    const m=movers[j];
+    for(let a=0;a<m.h;a++) for(let b=0;b<m.w;b++) o[(r+a)*C+c+b]=1;
+  });
+  return o;
+}
+function maxDist(i,dr,dc){
+  const o=occExcept(i), m=movers[i], C=L.cols, [r,c]=pos[i];
+  let k=0;
+  for(;;){
+    const nr=r+dr*(k+1), nc=c+dc*(k+1);
+    if(nr<0||nc<0||nr+m.h>L.rows||nc+m.w>C) break;
+    let ok=true;
+    for(let a=0;a<m.h&&ok;a++) for(let b=0;b<m.w;b++) if(o[(nr+a)*C+nc+b]){ ok=false; break; }
+    if(!ok) break;
+    k++;
+  }
+  return k;
+}
+
+function attachDrag(el,i){
+  el.addEventListener('pointerdown',e=>{
+    if(won||drag||demo) return;
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId);
+    drag={i,el,id:e.pointerId,x0:e.clientX,y0:e.clientY,axis:null,off:0,
+      lim:{up:maxDist(i,-1,0),down:maxDist(i,1,0),left:maxDist(i,0,-1),right:maxDist(i,0,1)}};
+    el.classList.add('dragging');
+  });
+  el.addEventListener('pointermove',e=>{
+    if(!drag||drag.el!==el||e.pointerId!==drag.id) return;
+    const dx=e.clientX-drag.x0, dy=e.clientY-drag.y0, lim=drag.lim;
+    if(Math.abs(dx)<6&&Math.abs(dy)<6){ drag.axis=null; drag.off=0; el.style.transform=''; return; }
+    if(!drag.axis){
+      drag.axis=Math.abs(dx)>=Math.abs(dy)?'x':'y';
+      const canX=lim.left+lim.right>0, canY=lim.up+lim.down>0;
+      if(drag.axis==='x'&&!canX&&canY) drag.axis='y';
+      else if(drag.axis==='y'&&!canY&&canX) drag.axis='x';
+    }
+    const x=drag.axis==='x';
+    const lo=-(x?lim.left:lim.up)*cell, hi=(x?lim.right:lim.down)*cell;
+    const v=Math.max(lo,Math.min(hi,x?dx:dy));
+    drag.off=v;
+    el.style.transform=x?`translate(${v}px,0)`:`translate(0,${v}px)`;
+  });
+  const end=e=>{
+    if(!drag||drag.el!==el||e.pointerId!==drag.id) return;
+    const d=drag; drag=null;
+    el.classList.remove('dragging');
+    const k=Math.round(d.off/cell);
+    if(k!==0){
+      const x=d.axis==='x';
+      commitMove(d.i,x?0:Math.sign(k),x?Math.sign(k):0,Math.abs(k));
+    } else {
+      el.style.transform='';
+    }
+  };
+  el.addEventListener('pointerup',end);
+  el.addEventListener('pointercancel',end);
+  el.addEventListener('lostpointercapture',end);
+}
+
+function applyMove(i,dr,dc,k){
+  hist.push(pos.map(p=>p.slice()));
+  pos[i]=[pos[i][0]+dr*k,pos[i][1]+dc*k];
+  moves++;
+  clearHint();
+  const m=movers[i];
+  els[i].style.transform='';
+  place(els[i],pos[i][0],pos[i][1],m.h,m.w);
+  return m.ball&&pos[i][0]===L.hole[0]&&pos[i][1]===L.hole[1];
+}
+function commitMove(i,dr,dc,k){
+  const inHole=applyMove(i,dr,dc,k);
+  setStatus(DEFAULT_STATUS);
+  updateUI();
+  if(inHole) win();
+}
+
+// 正确演示：从本关开局按最优解一步一步走给你看
+function startDemo(){
+  if(demo){ loadLevel(li); return; }
+  loadLevel(li);
+  const path=solve(pos);
+  if(!path) return;
+  demo={path,step:0,timer:null};
+  board.classList.add('demo');
+  updateUI();
+  setStatus(`正确演示：一共 ${path.length} 步，马上开始。`,true);
+  demo.timer=setTimeout(demoShow,700);
+}
+function demoShow(){
+  if(!demo) return;
+  const mv=demo.path[demo.step];
+  showGhost(mv);
+  setStatus(`正确演示 第 ${demo.step+1} / ${demo.path.length} 步：<br>把${pieceName(mv.i)}往${DIR_NAMES(mv)}移 ${mv.k} 格`,true);
+  demo.timer=setTimeout(demoMove,650);
+}
+function demoMove(){
+  if(!demo) return;
+  const mv=demo.path[demo.step];
+  const inHole=applyMove(mv.i,mv.dr,mv.dc,mv.k);
+  demo.step++;
+  updateUI();
+  if(inHole||demo.step>=demo.path.length){
+    const n=demo.path.length;
+    demo=null; won=true;
+    setTimeout(()=>els[els.length-1].classList.add('sink'),300);
+    setTimeout(()=>board.classList.remove('demo'),400);
+    setStatus(`演示完毕，一共 ${n} 步。点“重来”自己走一遍。`,true);
+    updateUI();
+    return;
+  }
+  demo.timer=setTimeout(demoShow,650);
+}
+
+function undo(){
+  if(won||!hist.length) return;
+  pos=hist.pop(); moves--;
+  clearHint(); setStatus(DEFAULT_STATUS);
+  movers.forEach((m,i)=>{ els[i].style.transform=''; place(els[i],pos[i][0],pos[i][1],m.h,m.w); });
+  updateUI();
+}
+
+function win(){
+  won=true;
+  const prev=best[li];
+  if(prev==null||moves<prev){ best[li]=moves; saveBest(); }
+  updateUI();
+  const ballEl=els[els.length-1];
+  setTimeout(()=>ballEl.classList.add('sink'),150);
+  const min=minSteps[li];
+  const perfect=min!=null&&moves<=min;
+  $('winText').innerHTML=`你用了 <b>${moves}</b> 步，最少要 <b>${min??'?'}</b> 步。`+
+    (perfect?'<br><span class="perfect">完美，就是最优解！</span>':'<br>再试试能不能更少？');
+  $('bNext').textContent=li<LEVELS.length-1?'下一关':'回到第 1 关';
+  setTimeout(()=>{ $('modal').hidden=false; $('bNext').focus(); },650);
+}
+
+// BFS: a move = one piece sliding any distance in one direction.
+function solve(p0){
+  const R=L.rows, C=L.cols, n=movers.length, bi=n-1, goal=L.hole[0]*C+L.hole[1];
+  const start=p0.map(([r,c])=>r*C+c);
+  if(start[bi]===goal) return [];
+  const K=s=>String.fromCharCode.apply(null,s);
+  const prev=new Map([[K(start),null]]);
+  const q=[start], occ=new Int8Array(R*C);
+  const dirs=[[-1,0],[1,0],[0,-1],[0,1]];
+  for(let qi=0;qi<q.length;qi++){
+    const s=q[qi], sk=K(s);
+    occ.set(fixedOcc);
+    for(let j=0;j<n;j++){
+      const m=movers[j], r=(s[j]/C)|0, c=s[j]%C;
+      for(let a=0;a<m.h;a++) for(let b=0;b<m.w;b++) occ[(r+a)*C+c+b]=j+2;
+    }
+    for(let i=0;i<n;i++){
+      const m=movers[i], r0=(s[i]/C)|0, c0=s[i]%C;
+      for(const [dr,dc] of dirs){
+        for(let k=1;;k++){
+          const nr=r0+dr*k, nc=c0+dc*k;
+          if(nr<0||nc<0||nr+m.h>R||nc+m.w>C) break;
+          let ok=true;
+          for(let a=0;a<m.h&&ok;a++) for(let b=0;b<m.w;b++){
+            const v=occ[(nr+a)*C+nc+b];
+            if(v&&v!==i+2){ ok=false; break; }
+          }
+          if(!ok) break;
+          const ns=s.slice(); ns[i]=nr*C+nc;
+          const nk=K(ns);
+          if(prev.has(nk)) continue;
+          prev.set(nk,[sk,{i,dr,dc,k}]);
+          if(i===bi&&ns[i]===goal){
+            const path=[]; let x=nk;
+            while(prev.get(x)){ const [pk,mv]=prev.get(x); path.push(mv); x=pk; }
+            return path.reverse();
+          }
+          q.push(ns);
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function showHint(){
+  if(won) return;
+  clearHint();
+  const path=solve(pos);
+  if(!path){ setStatus('这个局面走不通了，点“重来”试试。'); return; }
+  const mv=path[0];
+  showGhost(mv);
+  setStatus(`提示：把闪烁的${pieceName(mv.i)}往${DIR_NAMES(mv)}拖 ${mv.k} 格，到虚线框。<br>照最优走法，从现在起还要 ${path.length} 步。`,true);
+}
+function showGhost(mv){
+  clearHint();
+  const m=movers[mv.i];
+  hint={i:mv.i,r:pos[mv.i][0]+mv.dr*mv.k,c:pos[mv.i][1]+mv.dc*mv.k};
+  ghostEl=document.createElement('div');
+  ghostEl.className='ghost'+(m.ball?' ball':'');
+  ghostEl.innerHTML='<div class="face"></div>';
+  board.appendChild(ghostEl);
+  place(ghostEl,hint.r,hint.c,m.h,m.w);
+  els[mv.i].classList.add('hinted');
+}
+function clearHint(){
+  if(hint) els[hint.i]&&els[hint.i].classList.remove('hinted');
+  if(ghostEl){ ghostEl.remove(); ghostEl=null; }
+  hint=null;
+}
+function setStatus(html,isHint){ const s=$('status'); s.innerHTML=html; s.classList.toggle('hint',!!isHint); }
+
+function updateUI(){
+  $('lvlLabel').textContent=`第 ${li+1} 关 / 共 ${LEVELS.length} 关`;
+  $('sMoves').textContent=moves;
+  $('sMin').textContent=minSteps[li]??'–';
+  $('sBest').textContent=best[li]??'–';
+  $('bUndo').disabled=won||!hist.length||!!demo;
+  $('bHint').disabled=won||!!demo;
+  $('bDemo').textContent=demo?'停止演示':'正确演示';
+  const wrap=$('levels'); wrap.innerHTML='';
+  LEVELS.forEach((_,i)=>{
+    const b=document.createElement('button');
+    b.className='dot'+(i===li?' cur':'')+(best[i]!=null?' done':'');
+    b.textContent=i+1; b.setAttribute('aria-label',`第 ${i+1} 关`);
+    b.onclick=()=>loadLevel(i); wrap.appendChild(b);
+  });
+}
+
+$('bUndo').onclick=undo;
+$('bReset').onclick=()=>loadLevel(li);
+$('bHint').onclick=showHint;
+$('bDemo').onclick=startDemo;
+$('bAgain').onclick=()=>loadLevel(li);
+$('bNext').onclick=()=>loadLevel(li<LEVELS.length-1?li+1:0);
+window.addEventListener('resize',()=>{ if(L) layout(); });
+document.addEventListener('keydown',e=>{
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='z'){ e.preventDefault(); undo(); }
+});
+
+let startLevel=0;
+try{ const v=parseInt(localStorage.getItem('hrd-level'),10); if(v>=0&&v<LEVELS.length) startLevel=v; }catch(e){}
+loadLevel(startLevel);
+</script>
+</body>
+</html>
